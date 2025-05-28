@@ -1,16 +1,31 @@
-from langchain.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+import streamlit as st
+from utils import process_pdf_and_save_to_vectorstore
+from rag_chain import get_rag_chain
+from dotenv import load_dotenv
+import os
 
-def process_pdf_and_save_to_vectorstore(pdf_path):
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
+load_dotenv()
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    splits = splitter.split_documents(documents)
+st.set_page_config(page_title="📄 Q&A Chatbot PDF")
+st.title("GenAI Chatbot from PDF document by nhuttran")
 
-    embedding = OpenAIEmbeddings()
-    vectordb = Chroma.from_documents(splits, embedding=embedding, persist_directory="db")
-    vectordb.persist()
-    return vectordb
+# Session state
+if "chain" not in st.session_state:
+    st.session_state.chain = None
+
+uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+
+if uploaded_file:
+    with open("temp.pdf", "wb") as f:
+        f.write(uploaded_file.read())
+
+    process_pdf_and_save_to_vectorstore("temp.pdf")
+    st.session_state.chain = get_rag_chain()
+    st.success("✅ Document processed successfully")
+
+query = st.text_input("💬 Enter question:")
+
+if query and st.session_state.chain:
+    response = st.session_state.chain.invoke(query)
+    st.write("🧠 Answer:")
+    st.write(response)
