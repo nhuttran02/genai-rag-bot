@@ -16,7 +16,6 @@ def get_rag_chain():
 
     embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-    # ✅ Load Chroma theo chuẩn mới với client
     client = chromadb.PersistentClient(path=db_path)
 
     vectordb = Chroma(
