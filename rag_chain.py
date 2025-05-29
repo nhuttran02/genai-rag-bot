@@ -1,12 +1,12 @@
 import os
-from langchain_community.vertorstores import Chroma
+from langchain_community.vectorstores import Chroma
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 def get_rag_chain():
     llm = ChatOpenAI(
-        model = "gryphe/mythomist-7b",
+        model = "deepseek/deepseek-r1-0528:free",
         openai_api_base = "https://openrouter.ai/api/v1",
         openai_api_key = os.getenv("OPENAI_API_KEY"),
         temperature = 0.3
