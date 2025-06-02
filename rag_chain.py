@@ -1,21 +1,17 @@
 import os
-try:
-    from langchain_community.vectorstores import Chroma
-except ImportError:
-    from langchain.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from chromadb.config import Settings
 import chromadb
 
-def get_rag_chain():
-    db_path = "db"
+def get_rag_chain(collection_id):
+    db_path = os.path.join("db", collection_id)
     if not os.path.exists(db_path):
         raise FileNotFoundError("Vector DB not found. Upload PDF first.")
 
     embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
     client = chromadb.PersistentClient(path=db_path)
 
     vectordb = Chroma(
@@ -38,5 +34,3 @@ def get_rag_chain():
         retriever=retriever,
         return_source_documents=True
     )
-
-
