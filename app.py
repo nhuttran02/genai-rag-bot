@@ -16,7 +16,6 @@ TEXTS = {
         "invalid_pdf": "❌ The uploaded file is not a valid PDF.",
         "file_info": "**File:** `{}` — {:.2f} MB",
         "processing": "🧠 Analyzing and embedding document...",
-        "steps": ["Reading PDF...", "Splitting text...", "Creating embeddings...", "Saving to database..."],
         "done": "✅ Document successfully processed. You can start chatting!",
         "question_placeholder": "e.g., What is this document about?",
         "ask_button": "🚀 Ask",
@@ -38,7 +37,6 @@ TEXTS = {
         "invalid_pdf": "❌ Tệp đã tải lên không phải là PDF hợp lệ.",
         "file_info": "**Tệp:** `{}` — {:.2f} MB",
         "processing": "🧠 Đang phân tích và embedding tài liệu...",
-        "steps": ["Đọc PDF...", "Tách đoạn...", "Tạo embeddings...", "Lưu vào database..."],
         "done": "✅ Tài liệu đã được xử lý. Bạn có thể bắt đầu trò chuyện!",
         "question_placeholder": "VD: Tài liệu này nói về điều gì?",
         "ask_button": "🚀 Hỏi",
@@ -73,7 +71,6 @@ st.set_page_config(page_title="AI PDF Assistant", page_icon="📄", layout="wide
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.selectbox("🌐 Language / Ngôn ngữ", options=["en", "vi"], index=0 if st.session_state.language == "en" else 1, key="language")
-    theme_mode = st.toggle("🌗 Dark Mode", value=False)
     st.markdown("### 📊 System Info")
     status = TEXTS[st.session_state.language]["status_ready"] if st.session_state.chain else TEXTS[st.session_state.language]["status_wait"]
     st.success(f"Status: {status}")
@@ -101,18 +98,6 @@ def is_valid_pdf(path):
     except:
         return False
 
-def show_spinner(text):
-    st.markdown(f"""
-        <div style="text-align:center;">
-            <div style="border:4px solid #f3f3f3;border-top:4px solid #667eea;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:auto;"></div>
-            <p style="color:#667eea;font-weight:bold;animation:pulse 1.5s infinite;">{text}</p>
-        </div>
-        <style>
-        @keyframes spin {{ 0%{{transform:rotate(0deg);}}100%{{transform:rotate(360deg);}} }}
-        @keyframes pulse {{ 0%{{opacity:1;}}50%{{opacity:0.5;}}100%{{opacity:1;}} }}
-        </style>
-    """, unsafe_allow_html=True)
-
 # ===================== MAIN INTERFACE =====================
 st.title(TEXTS[st.session_state.language]["title"])
 st.header(TEXTS[st.session_state.language]["upload_header"])
@@ -130,21 +115,15 @@ if uploaded_file:
         st.error(TEXTS[st.session_state.language]["invalid_pdf"])
         os.remove(temp_path)
     elif ensure_db_permissions("db"):
-        show_spinner(TEXTS[st.session_state.language]["processing"])
-        progress = st.progress(0)
-        steps = TEXTS[st.session_state.language]["steps"]
-        for i in range(100):
-            time.sleep(0.02)
-            progress.progress(i + 1)
-            st.text(steps[min(i // 25, len(steps) - 1)])
-        try:
-            process_pdf_and_save_to_vectorstore(temp_path)
-            st.session_state.chain = get_rag_chain()
-            st.success(TEXTS[st.session_state.language]["done"])
-        except Exception as e:
-            st.error(f"❌ {str(e)}")
-        finally:
-            os.remove(temp_path)
+        with st.spinner(TEXTS[st.session_state.language]["processing"]):
+            try:
+                process_pdf_and_save_to_vectorstore(temp_path)
+                st.session_state.chain = get_rag_chain()
+                st.success(TEXTS[st.session_state.language]["done"])
+            except Exception as e:
+                st.error(f"❌ {str(e)}")
+            finally:
+                os.remove(temp_path)
 
 if st.session_state.chain:
     st.header("💬 " + TEXTS[st.session_state.language]["title"])
@@ -157,14 +136,13 @@ if st.session_state.chain:
         st.rerun()
 
     if ask and query.strip():
-        show_spinner("🧠 Thinking...")
-        time.sleep(1)
-        try:
-            response = st.session_state.chain.invoke({"query": query})
-            answer = response.get("result", "No answer.")
-            st.session_state.conversation_history.append((query, answer))
-        except Exception as e:
-            st.error(f"❌ {str(e)}")
+        with st.spinner("🧠 Thinking..."):
+            try:
+                response = st.session_state.chain.invoke({"query": query})
+                answer = response.get("result", "No answer.")
+                st.session_state.conversation_history.append((query, answer))
+            except Exception as e:
+                st.error(f"❌ {str(e)}")
 
     if st.session_state.conversation_history:
         st.markdown(TEXTS[st.session_state.language]["conversation"])
