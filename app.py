@@ -7,7 +7,6 @@ import time
 import uuid
 import fitz
 
-# ===================== TEXT LOCALIZATION =====================
 TEXTS = {
     "en": {
         "title": "🤖 AI PDF Assistant by nhuttran",
@@ -22,7 +21,7 @@ TEXTS = {
         "clear_button": "🗑️ Clear",
         "answer_header": "### 🤖 Answer:",
         "source_ref": "📚 Source References",
-        "conversation": "### 📝 Conversation History",
+        "conversation": "### 📜 Conversation History",
         "status_ready": "✅ Ready",
         "status_wait": "⏳ Waiting for document",
         "instructions": "1. Upload PDF\n2. Wait for processing\n3. Ask questions\n4. Get smart answers",
@@ -43,7 +42,7 @@ TEXTS = {
         "clear_button": "🗑️ Xóa",
         "answer_header": "### 🤖 Trả lời:",
         "source_ref": "📚 Nguồn tham khảo",
-        "conversation": "### 📝 Lịch sử trò chuyện",
+        "conversation": "### 📜 Lịch sử trò chuyện",
         "status_ready": "✅ Sẵn sàng",
         "status_wait": "⏳ Chờ tài liệu",
         "instructions": "1. Tải lên PDF\n2. Chờ xử lý\n3. Đặt câu hỏi\n4. Nhận câu trả lời thông minh",
@@ -53,7 +52,6 @@ TEXTS = {
     }
 }
 
-# ===================== SETUP =====================
 load_dotenv()
 
 if "language" not in st.session_state:
@@ -62,13 +60,18 @@ if "chain" not in st.session_state:
     st.session_state.chain = None
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
-
-clear_lock = lambda: os.remove(os.path.join("db", "chroma.sqlite.lock")) if os.path.exists(os.path.join("db", "chroma.sqlite.lock")) else None
-clear_lock()
+if "collection_id" not in st.session_state:
+    st.session_state.collection_id = None
 
 st.set_page_config(page_title="AI PDF Assistant", page_icon="📄", layout="wide")
 
-# ===================== SIDEBAR =====================
+# Restore previous session if available
+if st.session_state.collection_id and not st.session_state.chain:
+    try:
+        st.session_state.chain = get_rag_chain(st.session_state.collection_id)
+    except Exception as e:
+        st.warning("⚠️ Unable to restore previous document session.")
+
 with st.sidebar:
     st.selectbox("🌐 Language / Ngôn ngữ", options=["en", "vi"], index=0 if st.session_state.language == "en" else 1, key="language")
     st.markdown("### 📊 System Info")
@@ -78,27 +81,9 @@ with st.sidebar:
     st.info(TEXTS[st.session_state.language]["instructions"])
     st.markdown("### 🧠 Model Info")
     st.code(TEXTS[st.session_state.language]["model_info"])
-    st.markdown("### 👨‍💻 Developer")
+    st.markdown("### 👨‍💼 Developer")
     st.markdown(TEXTS[st.session_state.language]["developer"])
 
-# ===================== FUNCTIONS =====================
-def ensure_db_permissions(path):
-    try:
-        os.makedirs(path, exist_ok=True)
-        os.chmod(path, 0o777)
-        return True
-    except Exception as e:
-        st.error(f"❌ DB Error: {str(e)}")
-        return False
-
-def is_valid_pdf(path):
-    try:
-        fitz.open(path).close()
-        return True
-    except:
-        return False
-
-# ===================== MAIN INTERFACE =====================
 st.title(TEXTS[st.session_state.language]["title"])
 st.header(TEXTS[st.session_state.language]["upload_header"])
 
@@ -111,19 +96,17 @@ if uploaded_file:
         f.write(file_bytes)
 
     st.markdown(TEXTS[st.session_state.language]["file_info"].format(uploaded_file.name, file_size))
-    if not is_valid_pdf(temp_path):
-        st.error(TEXTS[st.session_state.language]["invalid_pdf"])
-        os.remove(temp_path)
-    elif ensure_db_permissions("db"):
+    try:
+        fitz.open(temp_path).close()
         with st.spinner(TEXTS[st.session_state.language]["processing"]):
-            try:
-                process_pdf_and_save_to_vectorstore(temp_path)
-                st.session_state.chain = get_rag_chain()
-                st.success(TEXTS[st.session_state.language]["done"])
-            except Exception as e:
-                st.error(f"❌ {str(e)}")
-            finally:
-                os.remove(temp_path)
+            collection_id = process_pdf_and_save_to_vectorstore(temp_path)
+            st.session_state.collection_id = collection_id
+            st.session_state.chain = get_rag_chain(collection_id)
+            st.success(TEXTS[st.session_state.language]["done"])
+    except Exception as e:
+        st.error(f"❌ {str(e)}")
+    finally:
+        os.remove(temp_path)
 
 if st.session_state.chain:
     st.header("💬 " + TEXTS[st.session_state.language]["title"])
@@ -155,11 +138,9 @@ if st.session_state.chain:
             for i, doc in enumerate(response["source_documents"][:3]):
                 page = doc.metadata.get("page", "Unknown")
                 st.info(f"**{i+1}. Page {page}:**\n{doc.page_content[:300]}...")
-
 else:
     st.info(TEXTS[st.session_state.language]["start_prompt"])
 
-# ===================== FOOTER =====================
 st.markdown("---")
 st.markdown(f"""
 <div style="text-align:center;color:#888;padding:10px;">
